@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, Clock, Settings, Database, RefreshCw, Zap, ShieldAlert } from 'lucide-react';
+import { Flame, Clock, Settings, User, Database, Zap } from 'lucide-react';
 import { getTimeUntilMidnight } from '../services/streakEngine';
 
 export function Header({ 
   habit, 
-  activeUserId, 
-  users, 
-  onSwitchUser, 
+  myProfile,
+  onOpenProfileModal,
   onOpenHabitModal, 
-  onOpenSupabaseModal, 
-  onOpenTimeTravelModal,
-  simulatedDateOffset
+  onOpenSupabaseModal 
 }) {
   const [countdown, setCountdown] = useState(getTimeUntilMidnight().formatted);
 
@@ -20,8 +17,6 @@ export function Header({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const activeUser = users[activeUserId] || users.user_a;
 
   return (
     <header className="app-header">
@@ -41,43 +36,17 @@ export function Header({
         </div>
 
         <div className="header-controls">
-          <button className="icon-btn" onClick={onOpenTimeTravelModal} title="Time Travel & Debug strict midnight resets">
-            <Clock size={16} />
-            <span>Time Travel</span>
-            {simulatedDateOffset > 0 && (
-              <span style={{ background: '#eab308', color: '#000', borderRadius: '10px', padding: '1px 6px', fontSize: '0.7rem', fontWeight: 800 }}>
-                +{simulatedDateOffset}d
-              </span>
-            )}
-          </button>
+          {myProfile && (
+            <button className="icon-btn primary" onClick={onOpenProfileModal} title="Edit your device profile">
+              <User size={16} />
+              <span>{myProfile.name}</span>
+              <Settings size={12} />
+            </button>
+          )}
 
-          <button className="icon-btn" onClick={onOpenSupabaseModal} title="Supabase Database Integration SQL & Guide">
+          <button className="icon-btn" onClick={onOpenSupabaseModal} title="Supabase Database Status">
             <Database size={16} />
             <span>Cloud SQL</span>
-          </button>
-        </div>
-      </div>
-
-      {/* User Switch Bar */}
-      <div className="user-switch-bar">
-        <div className="current-actor-label">
-          <ShieldAlert size={14} color="#06b6d4" />
-          <span>Active Device Actor: <strong>{activeUser.name}</strong></span>
-        </div>
-
-        <div className="user-selector-pills">
-          <button 
-            className={`pill-btn cyan ${activeUserId === 'user_a' ? 'active' : ''}`}
-            onClick={() => onSwitchUser('user_a')}
-          >
-            ⚡ {users.user_a.name}
-          </button>
-
-          <button 
-            className={`pill-btn orange ${activeUserId === 'user_b' ? 'active' : ''}`}
-            onClick={() => onSwitchUser('user_b')}
-          >
-            🔥 {users.user_b.name}
           </button>
         </div>
       </div>

@@ -3,202 +3,136 @@ import { Header } from './components/Header';
 import { DuelDashboard } from './components/DuelDashboard';
 import { HistoryHeatmap } from './components/HistoryHeatmap';
 import { HabitCustomizerModal } from './components/HabitCustomizerModal';
-import { TimeTravelModal } from './components/TimeTravelModal';
 import { SupabaseGuideModal } from './components/SupabaseGuideModal';
+import { ProfileSetupModal } from './components/ProfileSetupModal';
 import { 
-  loadAppState, 
-  saveAppState, 
-  resetToDemoState, 
-  subscribeToStorageUpdates, 
-  getEffectiveDate 
+  getDeviceId,
+  getEffectiveDate,
+  loadHabitConfig,
+  saveHabitConfig,
+  loadLocalProfiles,
+  saveProfileToStorage,
+  subscribeToProfiles
 } from './services/storageAdapter';
-import { recordTick, calibrateUserStreak } from './services/streakEngine';
+import { recordTick } from './services/streakEngine';
 
 export function App() {
-  const [appState, setAppState] = useState(() => loadAppState());
+  const [myDeviceId] = useState(() => getDeviceId());
+  const [habit, setHabit] = useState(() => loadHabitConfig());
+  const [profiles, setProfiles] = useState(() => loadLocalProfiles());
+
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showHabitModal, setShowHabitModal] = useState(false);
-  const [showTimeTravelModal, setShowTimeTravelModal] = useState(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
 
-  // Subscribe to multi-tab state sync
+  const myProfile = profiles[myDeviceId] || null;
+
+  // Auto open Profile Setup modal if this device has no profile yet
   useEffect(() => {
-    const unsubscribe = subscribeToStorageUpdates((newState) => {
-      setAppState(newState);
+    if (!myProfile) {
+      setShowProfileModal(true);
+    }
+  }, [myProfile]);
+
+  // Subscribe to real-time updates from other devices / tabs
+  useEffect(() => {
+    const unsubscribe = subscribeToProfiles((updatedProfiles) => {
+      setProfiles(updatedProfiles);
     });
     return unsubscribe;
   }, []);
 
-  // Periodic calibration check (runs every 10 seconds to auto-wipe at midnight)
-  useEffect(() => {
-    const checkMidnight = () => {
-      setAppState((prev) => {
-        const effectiveDate = getEffectiveDate(prev);
-        const calibratedA = calibrateUserStreak(prev.users.user_a, effectiveDate);
-        const calibratedB = calibrateUserStreak(prev.users.user_b, effectiveDate);
-
-        // Check if calibration modified streaks or status
-        if (
-          calibratedA.currentStreak !== prev.users.user_a.currentStreak ||
-          calibratedB.currentStreak !== prev.users.user_b.currentStreak ||
-          calibratedA.isTickedToday !== prev.users.user_a.isTickedToday ||
-          calibratedB.isTickedToday !== prev.users.user_b.isTickedToday
-        ) {
-          const updated = {
-            ...prev,
-            users: {
-              user_a: calibratedA,
-              user_b: calibratedB
-            }
-          };
-          saveAppState(updated);
-          return updated;
-        }
-        return prev;
-      });
+  // Save profile changes (new or edit)
+  const handleSaveProfile = useCallback(async (profileData) => {
+    const existing = profiles[myDeviceId] || {};
+    const updated = {
+      ...existing,
+      id: myDeviceId,
+      name: profileData.name,
+      tagline: profileData.tagline,
+      avatar: profileData.avatar,
+      colorTheme: profileData.colorTheme,
+      currentStreak: existing.currentStreak || 0,
+      bestStreak: existing.bestStreak || 0,
+      lastTickedDate: existing.lastTickedDate || null,
+      history: existing.history || {}
     };
 
-    const interval = setInterval(checkMidnight, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    const saved = await saveProfileToStorage(updated);
+    setProfiles((prev) => ({
+      ...prev,
+      [myDeviceId]: saved
+    }));
+    setShowProfileModal(false);
+  }, [myDeviceId, profiles]);
 
-  // Handler for ticking today for active user
-  const handleTick = useCallback((userId) => {
-    setAppState((prev) => {
-      const effectiveDate = getEffectiveDate(prev);
-      const targetUser = prev.users[userId];
-      
-      const updatedUser = recordTick(targetUser, effectiveDate);
-      const updatedState = {
+  // Handle Tick action for this device's profile
+  const handleTick = useCallback(async (userToTick) => {
+    if (userToTick.id !== myDeviceId) return;
+
+    try {
+      const today = getEffectiveDate();
+      const updatedUser = recordTick(userToTick, today);
+      const saved = await saveProfileToStorage(updatedUser);
+
+      setProfiles((prev) => ({
         ...prev,
-        users: {
-          ...prev.users,
-          [userId]: updatedUser
-        }
-      };
+        [myDeviceId]: saved
+      }));
+    } catch (e) {
+      console.warn('Tick error:', e.message);
+    }
+  }, [myDeviceId]);
 
-      saveAppState(updatedState);
-      return updatedState;
-    });
-  }, []);
-
-  // Handler for switching active profile actor
-  const handleSwitchUser = useCallback((userId) => {
-    setAppState((prev) => {
-      const updated = { ...prev, activeUserId: userId };
-      saveAppState(updated);
-      return updated;
-    });
-  }, []);
-
-  // Handler for customizing active habit challenge
+  // Save Habit challenge title
   const handleSaveHabit = useCallback((habitData) => {
-    setAppState((prev) => {
-      const updated = {
-        ...prev,
-        habit: {
-          ...prev.habit,
-          ...habitData
-        }
-      };
-      saveAppState(updated);
-      return updated;
-    });
-  }, []);
-
-  // Time travel debug handlers
-  const handleAdvanceDays = useCallback((daysCount) => {
-    setAppState((prev) => {
-      const newOffset = (prev.simulatedDateOffsetDays || 0) + daysCount;
-      const tempState = { ...prev, simulatedDateOffsetDays: newOffset };
-      const effectiveDate = getEffectiveDate(tempState);
-
-      const calibratedState = {
-        ...tempState,
-        users: {
-          user_a: calibrateUserStreak(prev.users.user_a, effectiveDate),
-          user_b: calibrateUserStreak(prev.users.user_b, effectiveDate)
-        }
-      };
-
-      saveAppState(calibratedState);
-      return calibratedState;
-    });
-  }, []);
-
-  const handleResetSimulatedTime = useCallback(() => {
-    setAppState((prev) => {
-      const tempState = { ...prev, simulatedDateOffsetDays: 0 };
-      const effectiveDate = getEffectiveDate(tempState);
-
-      const calibratedState = {
-        ...tempState,
-        users: {
-          user_a: calibrateUserStreak(prev.users.user_a, effectiveDate),
-          user_b: calibrateUserStreak(prev.users.user_b, effectiveDate)
-        }
-      };
-
-      saveAppState(calibratedState);
-      return calibratedState;
-    });
-  }, []);
-
-  const handleResetDemoState = useCallback(() => {
-    const fresh = resetToDemoState();
-    setAppState(fresh);
+    setHabit(habitData);
+    saveHabitConfig(habitData);
   }, []);
 
   return (
     <div className="app-viewport">
       {/* Header Bar */}
       <Header 
-        habit={appState.habit}
-        activeUserId={appState.activeUserId}
-        users={appState.users}
-        onSwitchUser={handleSwitchUser}
+        habit={habit}
+        myProfile={myProfile}
+        onOpenProfileModal={() => setShowProfileModal(true)}
         onOpenHabitModal={() => setShowHabitModal(true)}
         onOpenSupabaseModal={() => setShowSupabaseModal(true)}
-        onOpenTimeTravelModal={() => setShowTimeTravelModal(true)}
-        simulatedDateOffset={appState.simulatedDateOffsetDays || 0}
       />
 
-      {/* Main Duel Battleground */}
+      {/* Main Duel Dashboard */}
       <main>
         <DuelDashboard 
-          users={appState.users}
-          activeUserId={appState.activeUserId}
+          profiles={profiles}
+          myDeviceId={myDeviceId}
           onTick={handleTick}
-          onSwitchUser={handleSwitchUser}
         />
       </main>
 
       {/* 14-Day History Heatmap */}
-      <HistoryHeatmap 
-        users={appState.users} 
-        simulatedDateOffset={appState.simulatedDateOffsetDays || 0}
-      />
+      <HistoryHeatmap users={{ user_a: Object.values(profiles)[0] || {}, user_b: Object.values(profiles)[1] || {} }} />
 
-      {/* Footer info */}
+      {/* Footer */}
       <footer style={{ textAlign: 'center', padding: '16px 0', fontSize: '0.8rem', color: '#64748b' }}>
-        StreakDuel &bull; 2-Player Daily Habit Competition Engine &bull; Strict Midnight Reset Active
+        StreakDuel &bull; Device Profile System &bull; Multi-Device Cloud Syncing
       </footer>
 
       {/* Modals */}
-      {showHabitModal && (
-        <HabitCustomizerModal 
-          habit={appState.habit}
-          onSave={handleSaveHabit}
-          onClose={() => setShowHabitModal(false)}
+      {showProfileModal && (
+        <ProfileSetupModal 
+          currentProfile={myProfile}
+          isFirstTime={!myProfile}
+          onSaveProfile={handleSaveProfile}
+          onClose={myProfile ? () => setShowProfileModal(false) : undefined}
         />
       )}
 
-      {showTimeTravelModal && (
-        <TimeTravelModal 
-          simulatedDateOffset={appState.simulatedDateOffsetDays || 0}
-          onAdvanceDays={handleAdvanceDays}
-          onResetSimulatedTime={handleResetSimulatedTime}
-          onResetDemoState={handleResetDemoState}
-          onClose={() => setShowTimeTravelModal(false)}
+      {showHabitModal && (
+        <HabitCustomizerModal 
+          habit={habit}
+          onSave={handleSaveHabit}
+          onClose={() => setShowHabitModal(false)}
         />
       )}
 

@@ -3,18 +3,30 @@ import { UserCard } from './UserCard';
 import { getLeaderboardStatus } from '../services/streakEngine';
 
 export function DuelDashboard({ 
-  users, 
-  activeUserId, 
-  onTick, 
-  onSwitchUser 
+  profiles, 
+  myDeviceId, 
+  onTick 
 }) {
-  const friendA = users.user_a;
-  const friendB = users.user_b;
-  const leaderboard = getLeaderboardStatus(friendA, friendB);
+  const profileList = Object.values(profiles || {});
+
+  let leaderboard = {
+    headline: '🔥 Habit Streak Duel',
+    subtext: 'Set up your profile on your device to compete!'
+  };
+
+  if (profileList.length >= 2) {
+    leaderboard = getLeaderboardStatus(profileList[0], profileList[1]);
+  } else if (profileList.length === 1) {
+    const single = profileList[0];
+    leaderboard = {
+      headline: `⚡ Welcome ${single.name}! You are on a ${single.currentStreak || 0}-day streak!`,
+      subtext: 'Share your website link with a friend so they can join the competition!'
+    };
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Leaderboard Summary Banner */}
+      {/* Leaderboard Banner */}
       <div className="leaderboard-banner">
         <div className="leader-headline">
           {leaderboard.headline}
@@ -26,18 +38,14 @@ export function DuelDashboard({
 
       {/* Side-by-Side User Cards */}
       <div className="duel-grid">
-        <UserCard 
-          user={friendA} 
-          activeUserId={activeUserId} 
-          onTick={onTick} 
-          onSwitchUser={onSwitchUser} 
-        />
-        <UserCard 
-          user={friendB} 
-          activeUserId={activeUserId} 
-          onTick={onTick} 
-          onSwitchUser={onSwitchUser} 
-        />
+        {profileList.map((user) => (
+          <UserCard 
+            key={user.id} 
+            user={user} 
+            myDeviceId={myDeviceId} 
+            onTick={onTick} 
+          />
+        ))}
       </div>
     </div>
   );
