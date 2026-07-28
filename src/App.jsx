@@ -5,6 +5,7 @@ import { HistoryHeatmap } from './components/HistoryHeatmap';
 import { HabitCustomizerModal } from './components/HabitCustomizerModal';
 import { SupabaseGuideModal } from './components/SupabaseGuideModal';
 import { ProfileSetupModal } from './components/ProfileSetupModal';
+import { InviteModal } from './components/InviteModal';
 import { 
   getDeviceId,
   getEffectiveDate,
@@ -24,6 +25,7 @@ export function App() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showHabitModal, setShowHabitModal] = useState(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const myProfile = profiles[myDeviceId] || null;
 
@@ -99,6 +101,7 @@ export function App() {
         onOpenProfileModal={() => setShowProfileModal(true)}
         onOpenHabitModal={() => setShowHabitModal(true)}
         onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+        onOpenInviteModal={() => setShowInviteModal(true)}
       />
 
       {/* Main Duel Dashboard */}
@@ -111,7 +114,7 @@ export function App() {
       </main>
 
       {/* 14-Day History Heatmap */}
-      <HistoryHeatmap users={{ user_a: Object.values(profiles)[0] || {}, user_b: Object.values(profiles)[1] || {} }} />
+      <HistoryHeatmap profiles={profiles} />
 
       {/* Footer */}
       <footer style={{ textAlign: 'center', padding: '16px 0', fontSize: '0.8rem', color: '#64748b' }}>
@@ -139,6 +142,12 @@ export function App() {
       {showSupabaseModal && (
         <SupabaseGuideModal 
           onClose={() => setShowSupabaseModal(false)}
+        />
+      )}
+
+      {showInviteModal && (
+        <InviteModal 
+          onClose={() => setShowInviteModal(false)}
         />
       )}
     </div>

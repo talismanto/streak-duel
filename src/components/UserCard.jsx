@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, Trophy, CheckCircle2, Hourglass, ShieldAlert } from 'lucide-react';
+import { Flame, Trophy, CheckCircle2, Hourglass, Award, Zap } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function UserCard({ 
@@ -13,17 +13,33 @@ export function UserCard({
   const handleTickClick = () => {
     if (!isMyProfile || isTicked) return;
 
-    // Confetti burst
+    // Mobile haptic vibration feedback
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate([40, 60, 40]); } catch (e) {}
+    }
+
+    // Confetti celebration burst
     try {
       confetti({
-        particleCount: 80,
-        spread: 70,
+        particleCount: 90,
+        spread: 80,
         origin: { y: 0.6 }
       });
     } catch (e) {}
 
     onTick(user);
   };
+
+  // Streak milestone badge calculation
+  const getStreakBadge = (streak) => {
+    if (streak >= 30) return { title: '👑 Legend', color: '#eab308' };
+    if (streak >= 14) return { title: '🛡️ Iron Discipline', color: '#a855f7' };
+    if (streak >= 7) return { title: '⚡ Weekly Master', color: '#06b6d4' };
+    if (streak >= 3) return { title: '🔥 On Fire!', color: '#f97316' };
+    return null;
+  };
+
+  const badge = getStreakBadge(user.currentStreak || 0);
 
   return (
     <div className={`user-card ${user.colorTheme || 'cyan'}-theme ${isMyProfile ? 'is-active-actor' : ''}`}>
@@ -61,6 +77,12 @@ export function UserCard({
         <Flame className="flame-icon-animated" size={40} />
         <div className="streak-number-giant">{user.currentStreak || 0}</div>
         <div className="streak-label">Day Streak</div>
+
+        {badge && (
+          <div style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${badge.color}`, color: badge.color, padding: '2px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800, marginTop: '2px' }}>
+            {badge.title}
+          </div>
+        )}
 
         <div className="best-streak-pill">
           <Trophy size={14} />

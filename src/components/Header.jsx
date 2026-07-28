@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, Clock, Settings, User, Database, Zap } from 'lucide-react';
+import { Flame, Clock, Settings, User, Database, Zap, Share2 } from 'lucide-react';
 import { getTimeUntilMidnight } from '../services/streakEngine';
 
 export function Header({ 
@@ -7,7 +7,8 @@ export function Header({
   myProfile,
   onOpenProfileModal,
   onOpenHabitModal, 
-  onOpenSupabaseModal 
+  onOpenSupabaseModal,
+  onOpenInviteModal 
 }) {
   const [countdown, setCountdown] = useState(getTimeUntilMidnight().formatted);
 
@@ -36,6 +37,11 @@ export function Header({
         </div>
 
         <div className="header-controls">
+          <button className="icon-btn" onClick={onOpenInviteModal} style={{ background: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4', color: '#06b6d4' }}>
+            <Share2 size={16} />
+            <span>Invite Friend</span>
+          </button>
+
           {myProfile && (
             <button className="icon-btn primary" onClick={onOpenProfileModal} title="Edit your device profile">
               <User size={16} />
