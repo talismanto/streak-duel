@@ -5,6 +5,7 @@ const DEVICE_ID_KEY   = 'streak_duel_device_user_id';
 const LOCAL_PROFILES_KEY = 'streak_duel_profiles_v2';
 const HABIT_KEY       = 'streak_duel_habit_v2';
 const WAGERS_KEY      = 'streak_duel_wagers_v2';
+const COMMENTS_KEY    = 'streak_duel_comments_v1';
 
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -495,10 +496,131 @@ export function subscribeToWagers(onWagersUpdated) {
     } catch (e) {}
   }
 
+    return () => {
+    window.removeEventListener('storage', handleStorage);
+    if (channel && supabase) supabase.removeChannel(channel);
+  };
+}
+
+/* ── Comments System ───────────────────────────────────────────── */
+
+export function loadComments() {
+  try {
+    const raw = localStorage.getItem(COMMENTS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+}
+
+function persistComments(commentsList) {
+  try {
+    localStorage.setItem(COMMENTS_KEY, JSON.stringify(commentsList));
+  } catch (e) {}
+}
+
+export async function saveCommentToStorage(comment) {
+  try {
+    const current = loadComments();
+    current.unshift(comment); // Newest first
+    persistComments(current);
+
+    if (supabase) {
+      const { error } = await supabase.from('comments').upsert({
+        id:           comment.id,
+        author_id:    comment.authorId,
+        author_name:  comment.authorName,
+        author_avatar:comment.authorAvatar || '',
+        text:         comment.text || '',
+        image_url:    comment.imageUrl || '',
+        created_at:   comment.createdAt || new Date().toISOString()
+      });
+      if (error) {
+        console.warn('Supabase saveComment error:', error.message);
+      }
+    }
+    return current;
+  } catch (e) {
+    console.error('saveCommentToStorage error:', e);
+    return loadComments();
+  }
+}
+
+export async function deleteCommentFromStorage(commentId) {
+  try {
+    const current = loadComments().filter(c => c.id !== commentId);
+    persistComments(current);
+
+    if (supabase) {
+      await supabase.from('comments').delete().eq('id', commentId);
+    }
+    return current;
+  } catch (e) {
+    console.error('deleteCommentFromStorage error:', e);
+    return loadComments();
+  }
+}
+
+function rowToComment(row) {
+  return {
+    id:          row.id,
+    authorId:    row.author_id,
+    authorName:  row.author_name,
+    authorAvatar:row.author_avatar || '',
+    text:        row.text || '',
+    imageUrl:    row.image_url || '',
+    createdAt:   row.created_at
+  };
+}
+
+export function subscribeToComments(onCommentsUpdated) {
+  if (typeof window === 'undefined') return () => {};
+
+  // Local storage tab sync
+  const handleStorage = (event) => {
+    if (event.key === COMMENTS_KEY) {
+      onCommentsUpdated(loadComments());
+    }
+  };
+  window.addEventListener('storage', handleStorage);
+
+  let channel;
+
+  if (supabase) {
+    // Initial fetch from cloud
+    supabase.from('comments').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+      if (!error && data) {
+        const loaded = data.map(rowToComment);
+        persistComments(loaded);
+        onCommentsUpdated(loaded);
+      }
+    }).catch(() => {});
+
+    // Realtime channel
+    try {
+      channel = supabase
+        .channel('realtime:comments')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'comments' },
+          () => {
+            supabase.from('comments').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+              if (!error && data) {
+                const loaded = data.map(rowToComment);
+                persistComments(loaded);
+                onCommentsUpdated(loaded);
+              }
+            }).catch(() => {});
+          }
+        )
+        .subscribe();
+    } catch (e) {}
+  }
+
   return () => {
     window.removeEventListener('storage', handleStorage);
     if (channel && supabase) supabase.removeChannel(channel);
   };
 }
+
 
 

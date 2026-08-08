@@ -1,14 +1,19 @@
 import React from 'react';
 import { UserCard } from './UserCard';
+import { CommentsBanner } from './CommentsBanner';
 import { getLeaderboardStatus, formatDate } from '../services/streakEngine';
 import { Coins, Edit3, AlertCircle, CheckCircle2, Flame, Swords, Plus, Check, X } from 'lucide-react';
 
 export function DuelDashboard({ 
   profiles, 
   myDeviceId, 
+  myProfile,
   onTick,
   habit,
   wagers = [],
+  comments = [],
+  onAddComment,
+  onDeleteComment,
   onOpenHabitModal,
   onOpenCreateWager,
   onOpenWagersTab,
@@ -147,8 +152,17 @@ export function DuelDashboard({
           />
         ))}
       </div>
+
+      {/* Expandable Activity & Comments Banner */}
+      <CommentsBanner
+        comments={comments}
+        myProfile={myProfile}
+        myDeviceId={myDeviceId}
+        onAddComment={onAddComment}
+        onDeleteComment={onDeleteComment}
+      />
       
-      {/* Active Duel Wager Banner (AT THE BOTTOM OF THE PAGE NOW!) */}
+      {/* Active Duel Wager Banner (AT THE BOTTOM OF THE PAGE!) */}
       <div 
         style={{
           background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12), rgba(249, 115, 22, 0.12))',

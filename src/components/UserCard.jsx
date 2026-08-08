@@ -1,18 +1,23 @@
-import React from 'react';
-import { Flame, Trophy, CheckCircle2, Hourglass, Award, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { Flame, Trophy, CheckCircle2, Hourglass } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { CheckinNoteModal } from './CheckinNoteModal';
 
 export function UserCard({ 
   user, 
   myDeviceId, 
   onTick 
 }) {
+  const [showNoteModal, setShowNoteModal] = useState(false);
   const isMyProfile = user.id === myDeviceId;
   const isTicked = user.isTickedToday;
 
   const handleTickClick = () => {
     if (!isMyProfile || isTicked) return;
+    setShowNoteModal(true);
+  };
 
+  const handleConfirmCheckin = (checkinData) => {
     // Mobile haptic vibration feedback
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate([40, 60, 40]); } catch (e) {}
@@ -27,7 +32,7 @@ export function UserCard({
       });
     } catch (e) {}
 
-    onTick(user);
+    onTick(user, checkinData);
   };
 
   // Streak milestone badge calculation
@@ -109,6 +114,15 @@ export function UserCard({
           </button>
         )}
       </div>
+
+      {/* Checkin Note Modal */}
+      {showNoteModal && (
+        <CheckinNoteModal
+          user={user}
+          onConfirmCheckin={handleConfirmCheckin}
+          onClose={() => setShowNoteModal(false)}
+        />
+      )}
     </div>
   );
 }

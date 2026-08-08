@@ -26,7 +26,11 @@ import {
   saveWagerToStorage,
   respondToWager,
   deleteWagerFromStorage,
-  subscribeToWagers
+  subscribeToWagers,
+  loadComments,
+  saveCommentToStorage,
+  deleteCommentFromStorage,
+  subscribeToComments
 } from './services/storageAdapter';
 import { recordTick } from './services/streakEngine';
 
@@ -37,6 +41,7 @@ export function App() {
   const [habit, setHabit]       = useState(() => loadHabitConfig());
   const [profiles, setProfiles] = useState(() => loadLocalProfiles());
   const [wagers, setWagers]     = useState(() => loadWagers());
+  const [comments, setComments] = useState(() => loadComments());
   const [tab, setTab]           = useState('dashboard'); // 'dashboard' | 'wagers'
 
   // Determine which screen to show on load
@@ -71,11 +76,15 @@ export function App() {
     const unsubscribeWagers = subscribeToWagers(updatedWagers => {
       setWagers(updatedWagers);
     });
+    const unsubscribeComments = subscribeToComments(updatedComments => {
+      setComments(updatedComments);
+    });
 
     return () => {
       unsubscribeProfiles();
       unsubscribeHabit();
       unsubscribeWagers();
+      unsubscribeComments();
     };
   }, []);
 
@@ -117,17 +126,44 @@ export function App() {
 
   /* ── Tick action ─────────────────────────────────────────── */
 
-  const handleTick = useCallback(async (userToTick) => {
+  const handleTick = useCallback(async (userToTick, checkinData = {}) => {
     if (userToTick.id !== myDeviceId) return;
     try {
       const today = getEffectiveDate();
       const updatedUser = recordTick(userToTick, today);
       const saved = await saveProfileToStorage(updatedUser);
       setProfiles(prev => ({ ...prev, [myDeviceId]: saved }));
+
+      // If user added text note or photo proof, automatically post it as a comment!
+      if (checkinData.text || checkinData.imageUrl) {
+        const checkinComment = {
+          id:           'cmt_' + Math.random().toString(36).substring(2, 11),
+          authorId:     myDeviceId,
+          authorName:   myProfile?.name || userToTick.name,
+          authorAvatar: myProfile?.avatar || userToTick.avatar || '',
+          text:         checkinData.text ? `🔥 Checked in! ${checkinData.text}` : '🔥 Completed today\'s habit streak!',
+          imageUrl:     checkinData.imageUrl || '',
+          createdAt:    new Date().toISOString()
+        };
+        const updatedComments = await saveCommentToStorage(checkinComment);
+        setComments(updatedComments);
+      }
     } catch (e) {
       console.warn('Tick error:', e.message);
     }
-  }, [myDeviceId]);
+  }, [myDeviceId, myProfile]);
+
+  /* ── Comment actions ─────────────────────────────────────── */
+
+  const handleAddComment = useCallback(async (commentData) => {
+    const updated = await saveCommentToStorage(commentData);
+    setComments(updated);
+  }, []);
+
+  const handleDeleteComment = useCallback(async (commentId) => {
+    const updated = await deleteCommentFromStorage(commentId);
+    setComments(updated);
+  }, []);
 
   /* ── Wager actions ───────────────────────────────────────── */
 
@@ -198,9 +234,13 @@ export function App() {
           <DuelDashboard
             profiles={profiles}
             myDeviceId={myDeviceId}
+            myProfile={myProfile}
             onTick={handleTick}
             habit={habit}
             wagers={wagers}
+            comments={comments}
+            onAddComment={handleAddComment}
+            onDeleteComment={handleDeleteComment}
             onOpenHabitModal={() => setShowHabitModal(true)}
             onOpenCreateWager={() => setShowCreateWager(true)}
             onOpenWagersTab={() => setTab('wagers')}
