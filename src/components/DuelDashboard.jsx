@@ -147,8 +147,12 @@ export function DuelDashboard({
           <UserCard 
             key={user.id} 
             user={user} 
-            myDeviceId={myDeviceId} 
-            onTick={onTick} 
+            myDeviceId={myDeviceId}
+            myProfile={myProfile}
+            comments={comments}
+            onTick={onTick}
+            onAddComment={onAddComment}
+            onDeleteComment={onDeleteComment}
           />
         ))}
       </div>

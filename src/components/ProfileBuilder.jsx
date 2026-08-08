@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Camera, Check, User, Pen, Search, RotateCcw, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { supabase, getDeviceId } from '../services/storageAdapter';
 
+import { compressImage } from '../services/storageAdapter';
+
 const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
@@ -222,13 +224,17 @@ export function ProfileBuilder({ existingProfile, onSave, isEditMode = false }) 
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
     setUploading(true);
-    const reader = new FileReader();
-    reader.onload = (evt) => { setAvatar(evt.target.result); setUploading(false); };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file, 400, 0.7);
+      setAvatar(compressed);
+    } catch (err) {
+      console.warn('Avatar compression error:', err);
+    }
+    setUploading(false);
   };
 
   const handleSubmit = (e) => {

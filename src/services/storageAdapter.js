@@ -502,6 +502,40 @@ export function subscribeToWagers(onWagersUpdated) {
   };
 }
 
+/* ── Image Compression Helper ──────────────────────────────────── */
+
+export function compressImage(file, maxWidth = 600, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      resolve('');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target.result); // Fallback to raw dataURL if image load fails
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ── Comments System ───────────────────────────────────────────── */
 
 export function loadComments() {
@@ -526,13 +560,14 @@ export async function saveCommentToStorage(comment) {
 
     if (supabase) {
       const { error } = await supabase.from('comments').upsert({
-        id:           comment.id,
-        author_id:    comment.authorId,
-        author_name:  comment.authorName,
-        author_avatar:comment.authorAvatar || '',
-        text:         comment.text || '',
-        image_url:    comment.imageUrl || '',
-        created_at:   comment.createdAt || new Date().toISOString()
+        id:            comment.id,
+        target_user_id:comment.targetUserId || '',
+        author_id:     comment.authorId,
+        author_name:   comment.authorName,
+        author_avatar: comment.authorAvatar || '',
+        text:          comment.text || '',
+        image_url:     comment.imageUrl || '',
+        created_at:    comment.createdAt || new Date().toISOString()
       });
       if (error) {
         console.warn('Supabase saveComment error:', error.message);
@@ -563,6 +598,7 @@ export async function deleteCommentFromStorage(commentId) {
 function rowToComment(row) {
   return {
     id:          row.id,
+    targetUserId:row.target_user_id || '',
     authorId:    row.author_id,
     authorName:  row.author_name,
     authorAvatar:row.author_avatar || '',

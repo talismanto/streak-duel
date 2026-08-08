@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { X, Camera, Flame, MessageSquare, Image, Check } from 'lucide-react';
+import { compressImage } from '../services/storageAdapter';
 
 export function CheckinNoteModal({ user, onConfirmCheckin, onClose }) {
   const [text, setText] = useState('');
@@ -7,17 +8,18 @@ export function CheckinNoteModal({ user, onConfirmCheckin, onClose }) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
 
     setUploading(true);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      setImage(evt.target.result);
-      setUploading(false);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file, 600, 0.7);
+      setImage(compressed);
+    } catch (err) {
+      console.warn('Image compression error:', err);
+    }
+    setUploading(false);
   };
 
   const handleSubmit = (e) => {

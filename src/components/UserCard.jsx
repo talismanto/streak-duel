@@ -2,11 +2,16 @@ import React, { useState } from 'react';
 import { Flame, Trophy, CheckCircle2, Hourglass } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CheckinNoteModal } from './CheckinNoteModal';
+import { UserCardComments } from './UserCardComments';
 
 export function UserCard({ 
   user, 
   myDeviceId, 
-  onTick 
+  myProfile,
+  comments = [],
+  onTick,
+  onAddComment,
+  onDeleteComment
 }) {
   const [showNoteModal, setShowNoteModal] = useState(false);
   const isMyProfile = user.id === myDeviceId;
@@ -114,6 +119,16 @@ export function UserCard({
           </button>
         )}
       </div>
+
+      {/* Dedicated Per-Person Comments Section */}
+      <UserCardComments
+        targetUser={user}
+        comments={comments}
+        myProfile={myProfile}
+        myDeviceId={myDeviceId}
+        onAddComment={onAddComment}
+        onDeleteComment={onDeleteComment}
+      />
 
       {/* Checkin Note Modal */}
       {showNoteModal && (
