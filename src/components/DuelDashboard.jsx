@@ -1,16 +1,29 @@
 import React from 'react';
 import { UserCard } from './UserCard';
 import { getLeaderboardStatus, formatDate } from '../services/streakEngine';
-import { Coins, Edit3, AlertCircle, CheckCircle2, Flame } from 'lucide-react';
+import { Coins, Edit3, AlertCircle, CheckCircle2, Flame, Swords, Plus, Check, X } from 'lucide-react';
 
 export function DuelDashboard({ 
   profiles, 
   myDeviceId, 
   onTick,
   habit,
-  onOpenHabitModal
+  wagers = [],
+  onOpenHabitModal,
+  onOpenCreateWager,
+  onOpenWagersTab,
+  onRespondWager
 }) {
   const profileList = Object.values(profiles || {});
+  const todayStr = formatDate();
+
+  // Find active accepted wagers involving me, or overall active wagers
+  const myActiveWager = wagers.find(w => 
+    w.status === 'accepted' && (w.creatorId === myDeviceId || w.targetId === myDeviceId)
+  ) || wagers.find(w => w.status === 'accepted');
+
+  // Pending wager sent TO me
+  const pendingForMe = wagers.filter(w => w.targetId === myDeviceId && w.status === 'pending');
 
   let leaderboard = {
     headline: '🔥 Habit Streak Duel',
@@ -30,32 +43,81 @@ export function DuelDashboard({
   // Calculate Wager Risk Status
   let wagerRiskText = null;
   let wagerStatusIcon = null;
-  const currentWager = habit?.wager || '☕ Loser buys coffee';
+  const currentWagerText = myActiveWager ? myActiveWager.wager : (habit?.wager || '☕ Loser buys coffee');
 
-  if (profileList.length >= 2) {
-    const todayStr = formatDate();
-    const p1 = profileList[0];
-    const p2 = profileList[1];
-    const p1Ticked = p1.lastTickedDate === todayStr;
-    const p2Ticked = p2.lastTickedDate === todayStr;
+  if (myActiveWager) {
+    const creatorP = profiles[myActiveWager.creatorId] || { name: myActiveWager.creatorName, lastTickedDate: null };
+    const targetP = profiles[myActiveWager.targetId] || { name: myActiveWager.targetName, lastTickedDate: null };
 
-    if (p1Ticked && !p2Ticked) {
-      wagerRiskText = `⚠️ ${p2.name} hasn't completed today's habit yet! On the hook for: ${currentWager}`;
+    const cTicked = creatorP.lastTickedDate === todayStr;
+    const tTicked = targetP.lastTickedDate === todayStr;
+
+    if (cTicked && !tTicked) {
+      wagerRiskText = `⚠️ ${targetP.name} hasn't checked in today! On the hook for: ${currentWagerText}`;
       wagerStatusIcon = <AlertCircle size={18} color="#f97316" />;
-    } else if (p2Ticked && !p1Ticked) {
-      wagerRiskText = `⚠️ ${p1.name} hasn't completed today's habit yet! On the hook for: ${currentWager}`;
+    } else if (tTicked && !cTicked) {
+      wagerRiskText = `⚠️ ${creatorP.name} hasn't checked in today! On the hook for: ${currentWagerText}`;
       wagerStatusIcon = <AlertCircle size={18} color="#f97316" />;
-    } else if (p1Ticked && p2Ticked) {
-      wagerRiskText = `✅ Both players checked in today! Safe from the wager (${currentWager}) today!`;
+    } else if (cTicked && tTicked) {
+      wagerRiskText = `✅ Both players checked in today! Safe from the wager today!`;
       wagerStatusIcon = <CheckCircle2 size={18} color="#10b981" />;
     } else {
-      wagerRiskText = `⏳ Race is on! First to check in puts pressure on the opponent. Wager: ${currentWager}`;
+      wagerRiskText = `⏳ Race is on between ${creatorP.name} & ${targetP.name}! Wager: ${currentWagerText}`;
       wagerStatusIcon = <Flame size={18} color="#eab308" />;
     }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+      {/* Pending Wager Challenges Sent to Me Alert Banner */}
+      {pendingForMe.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 179, 8, 0.2))',
+          border: '2px solid #f97316',
+          borderRadius: '20px',
+          padding: '16px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          boxShadow: '0 8px 30px rgba(249, 115, 22, 0.3)'
+        }}>
+          {pendingForMe.map(pw => (
+            <div key={pw.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Swords size={24} color="#f97316" />
+                <div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff' }}>
+                    ⚡ <span style={{ color: '#f97316' }}>{pw.creatorName}</span> challenged you to a Wager!
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#fef08a', fontWeight: 700, marginTop: '2px' }}>
+                    Stakes: {pw.wager} &bull; Habit: {pw.title}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => onRespondWager(pw.id, 'declined')}
+                  className="icon-btn"
+                  style={{ color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+                >
+                  <X size={14} />
+                  <span>Decline</span>
+                </button>
+                <button
+                  onClick={() => onRespondWager(pw.id, 'accepted')}
+                  className="icon-btn primary"
+                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                >
+                  <Check size={14} />
+                  <span>Accept Wager!</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       
       {/* Dynamic Stakes / Wager Banner */}
       <div 
@@ -90,28 +152,44 @@ export function DuelDashboard({
             </div>
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#eab308', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                CURRENT STAKES / WAGER
+                ACTIVE DUEL WAGER
               </div>
               <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.2rem', fontWeight: 900, color: '#fff' }}>
-                {currentWager}
+                {currentWagerText}
               </div>
             </div>
           </div>
 
-          <button 
-            className="icon-btn"
-            onClick={onOpenHabitModal}
-            style={{
-              background: 'rgba(234, 179, 8, 0.15)',
-              borderColor: 'rgba(234, 179, 8, 0.4)',
-              color: '#fef08a',
-              fontSize: '0.8rem',
-              fontWeight: 700
-            }}
-          >
-            <Edit3 size={14} />
-            <span>Change Stakes</span>
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              className="icon-btn"
+              onClick={onOpenCreateWager}
+              style={{
+                background: 'rgba(249, 115, 22, 0.15)',
+                borderColor: 'rgba(249, 115, 22, 0.4)',
+                color: '#fb923c',
+                fontSize: '0.8rem',
+                fontWeight: 700
+              }}
+            >
+              <Plus size={14} />
+              <span>Propose Wager</span>
+            </button>
+            <button 
+              className="icon-btn"
+              onClick={onOpenWagersTab}
+              style={{
+                background: 'rgba(234, 179, 8, 0.15)',
+                borderColor: 'rgba(234, 179, 8, 0.4)',
+                color: '#fef08a',
+                fontSize: '0.8rem',
+                fontWeight: 700
+              }}
+            >
+              <Swords size={14} />
+              <span>All Wagers</span>
+            </button>
+          </div>
         </div>
 
         {/* Live Risk Alert Bar */}

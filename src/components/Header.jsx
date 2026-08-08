@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, Clock, Settings, Share2, ShieldCheck, Crown } from 'lucide-react';
+import { Flame, Clock, Settings, Share2, Crown, Swords, LayoutGrid, Plus } from 'lucide-react';
 import { getTimeUntilMidnight } from '../services/streakEngine';
 
 export function Header({ 
   habit, 
   myProfile,
+  currentTab,
+  onTabChange,
+  pendingWagersCount = 0,
   onOpenEditProfile,
   onOpenHabitModal, 
   onOpenInviteModal,
-  onOpenAdminPanel
+  onOpenAdminPanel,
+  onOpenCreateWager
 }) {
   const [countdown, setCountdown] = useState(getTimeUntilMidnight().formatted);
 
@@ -38,8 +42,78 @@ export function Header({
           </div>
         </div>
 
-        {/* Controls */}
+        {/* Header Navigation Tabs & Controls */}
         <div className="header-controls">
+
+          {/* Navigation Tabs */}
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '3px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <button
+              onClick={() => onTabChange('dashboard')}
+              style={{
+                background: currentTab === 'dashboard' ? 'rgba(6,182,212,0.25)' : 'transparent',
+                color: currentTab === 'dashboard' ? '#38bdf8' : '#94a3b8',
+                border: 'none',
+                borderRadius: '9px',
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s'
+              }}
+            >
+              <LayoutGrid size={14} />
+              <span>Arena</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('wagers')}
+              style={{
+                background: currentTab === 'wagers' ? 'rgba(249,115,22,0.25)' : 'transparent',
+                color: currentTab === 'wagers' ? '#fb923c' : '#94a3b8',
+                border: 'none',
+                borderRadius: '9px',
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                position: 'relative',
+                transition: 'all 0.2s'
+              }}
+            >
+              <Swords size={14} />
+              <span>Wagers</span>
+              {pendingWagersCount > 0 && (
+                <span style={{
+                  background: '#ef4444',
+                  color: '#fff',
+                  fontSize: '0.65rem',
+                  fontWeight: 900,
+                  borderRadius: '10px',
+                  padding: '1px 6px',
+                  marginLeft: '2px'
+                }}>
+                  {pendingWagersCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* New Wager Button */}
+          <button
+            className="icon-btn"
+            onClick={onOpenCreateWager}
+            style={{ color: '#f97316', borderColor: 'rgba(249,115,22,0.3)', background: 'rgba(249,115,22,0.08)' }}
+            title="Challenge a player to a wager"
+          >
+            <Plus size={15} />
+            <span>Challenge</span>
+          </button>
 
           {/* Invite button */}
           <button
@@ -51,13 +125,13 @@ export function Header({
             <span>Invite</span>
           </button>
 
-          {/* Admin button — only visible to admin */}
+          {/* Admin button */}
           {isAdmin && (
             <button
               className="icon-btn"
               onClick={onOpenAdminPanel}
               style={{ color: '#eab308', borderColor: 'rgba(234,179,8,0.3)', background: 'rgba(234,179,8,0.08)' }}
-              title="Admin Panel — manage players"
+              title="Admin Panel"
             >
               <Crown size={15} />
               <span>Admin</span>
@@ -80,7 +154,7 @@ export function Header({
         </div>
       </div>
 
-      {/* Countdown */}
+      {/* Countdown Banner */}
       <div className="countdown-banner">
         <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>
           ⏰ Daily window closes at midnight

@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const DEVICE_ID_KEY   = 'streak_duel_device_user_id';
 const LOCAL_PROFILES_KEY = 'streak_duel_profiles_v2';
 const HABIT_KEY       = 'streak_duel_habit_v2';
+const WAGERS_KEY      = 'streak_duel_wagers_v2';
 
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -335,3 +336,154 @@ export async function removeProfileFromStorage(targetId) {
     return loadLocalProfiles();
   }
 }
+
+/* ── Wagers System ───────────────────────────────────────────── */
+
+export function loadWagers() {
+  try {
+    const raw = localStorage.getItem(WAGERS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+}
+
+function persistWagers(wagersList) {
+  try {
+    localStorage.setItem(WAGERS_KEY, JSON.stringify(wagersList));
+  } catch (e) {}
+}
+
+export async function saveWagerToStorage(wager) {
+  try {
+    const current = loadWagers();
+    const idx = current.findIndex(w => w.id === wager.id);
+    if (idx >= 0) {
+      current[idx] = wager;
+    } else {
+      current.unshift(wager);
+    }
+    persistWagers(current);
+
+    if (supabase) {
+      await supabase.from('wagers').upsert({
+        id:            wager.id,
+        creator_id:    wager.creatorId,
+        creator_name:  wager.creatorName,
+        creator_avatar:wager.creatorAvatar || '',
+        target_id:     wager.targetId,
+        target_name:   wager.targetName,
+        target_avatar: wager.targetAvatar  || '',
+        title:         wager.title,
+        wager:         wager.wager,
+        status:        wager.status || 'pending',
+        created_at:    wager.createdAt || new Date().toISOString()
+      });
+    }
+    return current;
+  } catch (e) {
+    console.error('saveWagerToStorage error:', e);
+    return loadWagers();
+  }
+}
+
+export async function respondToWager(wagerId, newStatus) {
+  try {
+    const current = loadWagers();
+    const target = current.find(w => w.id === wagerId);
+    if (target) {
+      target.status = newStatus;
+      persistWagers([...current]);
+
+      if (supabase) {
+        await supabase.from('wagers').update({ status: newStatus }).eq('id', wagerId);
+      }
+    }
+    return loadWagers();
+  } catch (e) {
+    console.error('respondToWager error:', e);
+    return loadWagers();
+  }
+}
+
+export async function deleteWagerFromStorage(wagerId) {
+  try {
+    const current = loadWagers().filter(w => w.id !== wagerId);
+    persistWagers(current);
+
+    if (supabase) {
+      await supabase.from('wagers').delete().eq('id', wagerId);
+    }
+    return current;
+  } catch (e) {
+    console.error('deleteWagerFromStorage error:', e);
+    return loadWagers();
+  }
+}
+
+function rowToWager(row) {
+  return {
+    id:            row.id,
+    creatorId:     row.creator_id,
+    creatorName:   row.creator_name,
+    creatorAvatar: row.creator_avatar || '',
+    targetId:      row.target_id,
+    targetName:    row.target_name,
+    targetAvatar:  row.target_avatar || '',
+    title:         row.title,
+    wager:         row.wager,
+    status:        row.status || 'pending',
+    createdAt:     row.created_at
+  };
+}
+
+export function subscribeToWagers(onWagersUpdated) {
+  if (typeof window === 'undefined') return () => {};
+
+  // Local storage tab sync
+  const handleStorage = (event) => {
+    if (event.key === WAGERS_KEY) {
+      onWagersUpdated(loadWagers());
+    }
+  };
+  window.addEventListener('storage', handleStorage);
+
+  let channel;
+
+  if (supabase) {
+    // Initial fetch from cloud
+    supabase.from('wagers').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+      if (!error && data) {
+        const loaded = data.map(rowToWager);
+        persistWagers(loaded);
+        onWagersUpdated(loaded);
+      }
+    }).catch(() => {});
+
+    // Realtime channel
+    try {
+      channel = supabase
+        .channel('realtime:wagers')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'wagers' },
+          (payload) => {
+            // Re-fetch all wagers on any change
+            supabase.from('wagers').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+              if (data) {
+                const loaded = data.map(rowToWager);
+                persistWagers(loaded);
+                onWagersUpdated(loaded);
+              }
+            }).catch(() => {});
+          }
+        )
+        .subscribe();
+    } catch (e) {}
+  }
+
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+    if (channel && supabase) supabase.removeChannel(channel);
+  };
+}
+

@@ -4,11 +4,13 @@ import { ProfileBuilder } from './components/ProfileBuilder';
 import { EditProfileModal } from './components/EditProfileModal';
 import { Header } from './components/Header';
 import { DuelDashboard } from './components/DuelDashboard';
+import { AllWagersFeed } from './components/AllWagersFeed';
 import { HistoryHeatmap } from './components/HistoryHeatmap';
 import { HabitCustomizerModal } from './components/HabitCustomizerModal';
 import { SupabaseGuideModal } from './components/SupabaseGuideModal';
 import { InviteModal } from './components/InviteModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
+import { CreateWagerModal } from './components/CreateWagerModal';
 import { 
   getDeviceId,
   getEffectiveDate,
@@ -19,7 +21,12 @@ import {
   saveProfileToStorage,
   subscribeToProfiles,
   claimAdminStatus,
-  removeProfileFromStorage
+  removeProfileFromStorage,
+  loadWagers,
+  saveWagerToStorage,
+  respondToWager,
+  deleteWagerFromStorage,
+  subscribeToWagers
 } from './services/storageAdapter';
 import { recordTick } from './services/streakEngine';
 
@@ -29,6 +36,8 @@ export function App() {
   const [myDeviceId] = useState(() => getDeviceId());
   const [habit, setHabit]       = useState(() => loadHabitConfig());
   const [profiles, setProfiles] = useState(() => loadLocalProfiles());
+  const [wagers, setWagers]     = useState(() => loadWagers());
+  const [tab, setTab]           = useState('dashboard'); // 'dashboard' | 'wagers'
 
   // Determine which screen to show on load
   const [view, setView] = useState(() => {
@@ -44,8 +53,12 @@ export function App() {
   const [showSupabaseModal,setShowSupabaseModal] = useState(false);
   const [showInviteModal,  setShowInviteModal]  = useState(false);
   const [showAdminPanel,   setShowAdminPanel]   = useState(false);
+  const [showCreateWager,  setShowCreateWager]  = useState(false);
 
   const myProfile = profiles[myDeviceId] || null;
+
+  // Pending wagers count sent to me
+  const pendingWagersCount = (wagers || []).filter(w => w.targetId === myDeviceId && w.status === 'pending').length;
 
   // Subscribe to realtime updates from other devices
   useEffect(() => {
@@ -55,12 +68,16 @@ export function App() {
     const unsubscribeHabit = subscribeToHabitConfig(updatedHabit => {
       setHabit(updatedHabit);
     });
+    const unsubscribeWagers = subscribeToWagers(updatedWagers => {
+      setWagers(updatedWagers);
+    });
+
     return () => {
       unsubscribeProfiles();
       unsubscribeHabit();
+      unsubscribeWagers();
     };
   }, []);
-
 
   /* ── Profile actions ─────────────────────────────────────── */
 
@@ -71,7 +88,6 @@ export function App() {
 
   const handleSaveProfile = useCallback(async (profileData) => {
     const existing = profiles[myDeviceId] || {};
-    // profileData.isAdmin may already be set if coming from recovery flow
     const isFirstProfile = Object.keys(profiles).length === 0 && !profileData.isAdmin;
 
     const updated = {
@@ -99,7 +115,6 @@ export function App() {
     setView('dashboard');
   }, [myDeviceId, profiles]);
 
-
   /* ── Tick action ─────────────────────────────────────────── */
 
   const handleTick = useCallback(async (userToTick) => {
@@ -113,6 +128,23 @@ export function App() {
       console.warn('Tick error:', e.message);
     }
   }, [myDeviceId]);
+
+  /* ── Wager actions ───────────────────────────────────────── */
+
+  const handleSendWager = useCallback(async (wagerData) => {
+    const updated = await saveWagerToStorage(wagerData);
+    setWagers(updated);
+  }, []);
+
+  const handleRespondWager = useCallback(async (wagerId, status) => {
+    const updated = await respondToWager(wagerId, status);
+    setWagers(updated);
+  }, []);
+
+  const handleDeleteWager = useCallback(async (wagerId) => {
+    const updated = await deleteWagerFromStorage(wagerId);
+    setWagers(updated);
+  }, []);
 
   /* ── Admin: remove player ────────────────────────────────── */
 
@@ -144,33 +176,52 @@ export function App() {
     );
   }
 
-  /* ── Dashboard ───────────────────────────────────────────── */
+  /* ── Dashboard / Main View ───────────────────────────────── */
   return (
     <div className="app-viewport">
       <Header
         habit={habit}
         myProfile={myProfile}
+        currentTab={tab}
+        onTabChange={setTab}
+        pendingWagersCount={pendingWagersCount}
         onOpenEditProfile={() => setShowEditProfile(true)}
         onOpenHabitModal={() => setShowHabitModal(true)}
         onOpenSupabaseModal={() => setShowSupabaseModal(true)}
         onOpenInviteModal={() => setShowInviteModal(true)}
         onOpenAdminPanel={() => setShowAdminPanel(true)}
+        onOpenCreateWager={() => setShowCreateWager(true)}
       />
 
       <main>
-        <DuelDashboard
-          profiles={profiles}
-          myDeviceId={myDeviceId}
-          onTick={handleTick}
-          habit={habit}
-          onOpenHabitModal={() => setShowHabitModal(true)}
-        />
+        {tab === 'dashboard' ? (
+          <DuelDashboard
+            profiles={profiles}
+            myDeviceId={myDeviceId}
+            onTick={handleTick}
+            habit={habit}
+            wagers={wagers}
+            onOpenHabitModal={() => setShowHabitModal(true)}
+            onOpenCreateWager={() => setShowCreateWager(true)}
+            onOpenWagersTab={() => setTab('wagers')}
+            onRespondWager={handleRespondWager}
+          />
+        ) : (
+          <AllWagersFeed
+            wagers={wagers}
+            profiles={profiles}
+            myDeviceId={myDeviceId}
+            onRespondWager={handleRespondWager}
+            onDeleteWager={handleDeleteWager}
+            onOpenCreateWager={() => setShowCreateWager(true)}
+          />
+        )}
       </main>
 
       <HistoryHeatmap profiles={profiles} />
 
       <footer style={{ textAlign: 'center', padding: '16px 0', fontSize: '0.75rem', color: '#64748b' }}>
-        StreakDuel &bull; Each device = one unique profile &bull; Synced via Supabase Cloud
+        StreakDuel &bull; Multi-Player Habit & Wager Platform &bull; Synced via Supabase Cloud
       </footer>
 
       {/* ── Modals ── */}
@@ -199,6 +250,16 @@ export function App() {
       {showInviteModal && (
         <InviteModal
           onClose={() => setShowInviteModal(false)}
+        />
+      )}
+
+      {showCreateWager && (
+        <CreateWagerModal
+          profiles={profiles}
+          myDeviceId={myDeviceId}
+          myProfile={myProfile}
+          onSendWager={handleSendWager}
+          onClose={() => setShowCreateWager(false)}
         />
       )}
 
