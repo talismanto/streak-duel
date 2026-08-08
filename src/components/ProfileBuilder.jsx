@@ -52,37 +52,58 @@ function RecoverProfile({ onRecovered, onBack }) {
 
   const handleClaim = async (cloudProfile) => {
     setClaiming(true);
-    const myNewDeviceId = getDeviceId();   // generates fresh ID if not set
+    const myNewDeviceId = getDeviceId();
 
-    // Re-assign the profile's ID to this device's new ID in Supabase
-    const { error: err } = await supabase
+    // Check if ANY active admin already exists (excluding the old orphaned row)
+    const { data: adminRows } = await supabase
       .from('profiles')
-      .update({ id: myNewDeviceId })
-      .eq('id', cloudProfile.id);
+      .select('id, is_admin')
+      .eq('is_admin', true);
 
-    if (err) {
-      // id column might be PK so we insert + delete instead
-      const { error: insertErr } = await supabase.from('profiles').insert({
-        ...cloudProfile,
-        id: myNewDeviceId
+    const otherAdmins   = (adminRows || []).filter(r => r.id !== cloudProfile.id);
+    const noAdminsLeft  = otherAdmins.length === 0;
+    const wasAdmin      = cloudProfile.is_admin === true;
+    // Grant admin: if they previously had it, OR if no one else is admin right now
+    const shouldBeAdmin = wasAdmin || noAdminsLeft;
+
+    try {
+      // Upsert recovered profile under the new device ID
+      await supabase.from('profiles').upsert({
+        id:               myNewDeviceId,
+        name:             cloudProfile.name,
+        tagline:          cloudProfile.tagline          || '',
+        avatar_url:       cloudProfile.avatar_url       || '',
+        color_theme:      cloudProfile.color_theme      || 'cyan',
+        current_streak:   cloudProfile.current_streak   || 0,
+        best_streak:      cloudProfile.best_streak      || 0,
+        last_ticked_date: cloudProfile.last_ticked_date || null,
+        history:          cloudProfile.history          || '{}',
+        is_admin:         shouldBeAdmin
       });
-      if (!insertErr) {
-        await supabase.from('profiles').delete().eq('id', cloudProfile.id);
-      }
+
+      // Best-effort: delete the old orphaned row so no duplicate shows up
+      await supabase.from('profiles').delete().eq('id', cloudProfile.id);
+
+    } catch (e) {
+      console.warn('Claim error (non-fatal):', e.message);
     }
 
-    // Build the recovered profile object in local shape
+    // Build the recovered profile for local state
     const recovered = {
-      id:            myNewDeviceId,
-      name:          cloudProfile.name,
-      tagline:       cloudProfile.tagline || '',
-      avatar:        cloudProfile.avatar_url || PRESET_AVATARS[0],
-      colorTheme:    cloudProfile.color_theme || 'cyan',
-      currentStreak: cloudProfile.current_streak || 0,
-      bestStreak:    cloudProfile.best_streak    || 0,
-      lastTickedDate:cloudProfile.last_ticked_date || null,
-      history:       cloudProfile.history ? JSON.parse(cloudProfile.history) : {},
-      isAdmin:       cloudProfile.is_admin || false
+      id:             myNewDeviceId,
+      name:           cloudProfile.name,
+      tagline:        cloudProfile.tagline          || '',
+      avatar:         cloudProfile.avatar_url       || PRESET_AVATARS[0],
+      colorTheme:     cloudProfile.color_theme      || 'cyan',
+      currentStreak:  cloudProfile.current_streak   || 0,
+      bestStreak:     cloudProfile.best_streak      || 0,
+      lastTickedDate: cloudProfile.last_ticked_date || null,
+      history:        cloudProfile.history
+                        ? (typeof cloudProfile.history === 'string'
+                            ? JSON.parse(cloudProfile.history)
+                            : cloudProfile.history)
+                        : {},
+      isAdmin: shouldBeAdmin
     };
 
     setClaiming(false);
