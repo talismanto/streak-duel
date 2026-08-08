@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Flame, Clock, Settings, User, Database, Zap, Share2 } from 'lucide-react';
+import { Flame, Clock, Settings, Database, Share2 } from 'lucide-react';
 import { getTimeUntilMidnight } from '../services/streakEngine';
 
 export function Header({ 
   habit, 
   myProfile,
-  onOpenProfileModal,
+  onOpenEditProfile,
   onOpenHabitModal, 
   onOpenSupabaseModal,
   onOpenInviteModal 
@@ -24,44 +24,48 @@ export function Header({
       <div className="header-top">
         <div className="brand-badge">
           <div className="brand-icon-wrapper">
-            <Flame size={24} />
+            <Flame size={22} />
           </div>
           <div className="brand-title-group">
             <h1>StreakDuel</h1>
-            <button className="habit-tag" onClick={onOpenHabitModal} title="Click to customize daily habit">
-              <Zap size={14} />
+            <button className="habit-tag" onClick={onOpenHabitModal} title="Tap to customize habit">
+              <Settings size={12} />
               {habit.title}
-              <Settings size={12} style={{ opacity: 0.7 }} />
             </button>
           </div>
         </div>
 
         <div className="header-controls">
-          <button className="icon-btn" onClick={onOpenInviteModal} style={{ background: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4', color: '#06b6d4' }}>
-            <Share2 size={16} />
-            <span>Invite Friend</span>
+          <button
+            className="icon-btn"
+            onClick={onOpenInviteModal}
+            style={{ color: '#06b6d4', borderColor: 'rgba(6,182,212,0.3)', background: 'rgba(6,182,212,0.08)' }}
+          >
+            <Share2 size={15} />
+            <span>Invite</span>
           </button>
 
           {myProfile && (
-            <button className="icon-btn primary" onClick={onOpenProfileModal} title="Edit your device profile">
-              <User size={16} />
-              <span>{myProfile.name}</span>
-              <Settings size={12} />
+            <button className="profile-pill" onClick={onOpenEditProfile} title="Edit your profile">
+              <img
+                src={myProfile.avatar}
+                alt={myProfile.name}
+                className="profile-pill-avatar"
+              />
+              <span className="profile-pill-name">{myProfile.name}</span>
+              <Settings size={12} color="#94a3b8" />
             </button>
           )}
-
-          <button className="icon-btn" onClick={onOpenSupabaseModal} title="Supabase Database Status">
-            <Database size={16} />
-            <span>Cloud SQL</span>
-          </button>
         </div>
       </div>
 
-      {/* Midnight Reset Countdown */}
+      {/* Midnight Countdown */}
       <div className="countdown-banner">
-        <span>⏰ <strong>Daily Check-in Window Closes At Midnight:</strong></span>
+        <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>
+          ⏰ Daily window closes at midnight
+        </span>
         <div className="countdown-timer">
-          <Clock size={16} />
+          <Clock size={15} />
           <span>{countdown}</span>
         </div>
       </div>
