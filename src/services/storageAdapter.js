@@ -536,12 +536,43 @@ export function compressImage(file, maxWidth = 600, quality = 0.7) {
   });
 }
 
-/* ── Comments System ───────────────────────────────────────────── */
+/* ── Comments System (Reset Daily at 12:00 PM Afternoon) ──────── */
+
+/** Returns the Date object representing 12:00 PM Noon boundary for current period */
+export function getNoonResetTimestamp(dateObj = new Date()) {
+  const now = new Date(dateObj);
+  const noon = new Date(now);
+  noon.setHours(12, 0, 0, 0); // 12:00:00.000 PM today
+
+  // If current time is before 12:00 PM, active period started yesterday at 12:00 PM
+  if (now < noon) {
+    noon.setDate(noon.getDate() - 1);
+  }
+  return noon;
+}
 
 export function loadComments() {
   try {
     const raw = localStorage.getItem(COMMENTS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const activeNoonBoundary = getNoonResetTimestamp();
+      
+      // Filter & keep only comments created AFTER the most recent 12:00 PM afternoon
+      const activeComments = parsed.filter(c => {
+        if (!c.createdAt) return false;
+        return new Date(c.createdAt) >= activeNoonBoundary;
+      });
+
+      // If comments created before 12:00 PM were pruned, update storage & Supabase
+      if (activeComments.length < parsed.length) {
+        persistComments(activeComments);
+        if (supabase) {
+          supabase.from('comments').delete().lt('created_at', activeNoonBoundary.toISOString()).then(() => {}).catch(() => {});
+        }
+      }
+      return activeComments;
+    }
   } catch (e) {}
   return [];
 }
@@ -555,11 +586,16 @@ function persistComments(commentsList) {
 export async function saveCommentToStorage(comment) {
   try {
     const current = loadComments();
-    current.unshift(comment); // Newest first
-    persistComments(current);
+    
+    // Avoid duplicate insertions
+    if (!current.some(c => c.id === comment.id)) {
+      current.unshift(comment); // Newest first
+      persistComments(current);
+    }
 
+    // Background push to Supabase — non-blocking for instant responsiveness
     if (supabase) {
-      const { error } = await supabase.from('comments').upsert({
+      supabase.from('comments').upsert({
         id:            comment.id,
         target_user_id:comment.targetUserId || '',
         author_id:     comment.authorId,
@@ -568,11 +604,11 @@ export async function saveCommentToStorage(comment) {
         text:          comment.text || '',
         image_url:     comment.imageUrl || '',
         created_at:    comment.createdAt || new Date().toISOString()
-      });
-      if (error) {
-        console.warn('Supabase saveComment error:', error.message);
-      }
+      }).then(({ error }) => {
+        if (error) console.warn('Supabase saveComment error:', error.message);
+      }).catch(() => {});
     }
+
     return current;
   } catch (e) {
     console.error('saveCommentToStorage error:', e);
@@ -622,30 +658,49 @@ export function subscribeToComments(onCommentsUpdated) {
   let channel;
 
   if (supabase) {
-    // Initial fetch from cloud
-    supabase.from('comments').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
-      if (!error && data) {
-        const loaded = data.map(rowToComment);
-        persistComments(loaded);
-        onCommentsUpdated(loaded);
-      }
-    }).catch(() => {});
+    const activeNoonBoundary = getNoonResetTimestamp();
 
-    // Realtime channel
+    // Initial fetch from cloud (only comments created after 12:00 PM afternoon)
+    supabase.from('comments')
+      .select('*')
+      .gte('created_at', activeNoonBoundary.toISOString())
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const loaded = data.map(rowToComment);
+          persistComments(loaded);
+          onCommentsUpdated(loaded);
+        }
+      }).catch(() => {});
+
+    // Instant Realtime Channel: insert/update directly without extra network delay
     try {
       channel = supabase
         .channel('realtime:comments')
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'comments' },
-          () => {
-            supabase.from('comments').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
-              if (!error && data) {
-                const loaded = data.map(rowToComment);
-                persistComments(loaded);
-                onCommentsUpdated(loaded);
+          (payload) => {
+            const row = payload.new;
+            if (!row) {
+              // Handle deletion event
+              onCommentsUpdated(loadComments());
+              return;
+            }
+
+            const incoming = rowToComment(row);
+            const activeNoon = getNoonResetTimestamp();
+            
+            // Only accept incoming comment if created after 12:00 PM noon
+            if (new Date(incoming.createdAt) >= activeNoon) {
+              const current = loadComments();
+              if (!current.some(c => c.id === incoming.id)) {
+                current.unshift(incoming);
+                current.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                persistComments(current);
+                onCommentsUpdated([...current]);
               }
-            }).catch(() => {});
+            }
           }
         )
         .subscribe();
@@ -657,6 +712,8 @@ export function subscribeToComments(onCommentsUpdated) {
     if (channel && supabase) supabase.removeChannel(channel);
   };
 }
+
+
 
 
 
