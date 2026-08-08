@@ -8,6 +8,7 @@ import { HistoryHeatmap } from './components/HistoryHeatmap';
 import { HabitCustomizerModal } from './components/HabitCustomizerModal';
 import { SupabaseGuideModal } from './components/SupabaseGuideModal';
 import { InviteModal } from './components/InviteModal';
+import { AdminPanelModal } from './components/AdminPanelModal';
 import { 
   getDeviceId,
   getEffectiveDate,
@@ -15,45 +16,45 @@ import {
   saveHabitConfig,
   loadLocalProfiles,
   saveProfileToStorage,
-  subscribeToProfiles
+  subscribeToProfiles,
+  claimAdminStatus,
+  removeProfileFromStorage
 } from './services/storageAdapter';
 import { recordTick } from './services/streakEngine';
 
-// App has 3 views: 'welcome', 'profile-setup', 'dashboard'
 const ONBOARDED_KEY = 'streak_duel_onboarded_v2';
 
 export function App() {
   const [myDeviceId] = useState(() => getDeviceId());
-  const [habit, setHabit] = useState(() => loadHabitConfig());
+  const [habit, setHabit]       = useState(() => loadHabitConfig());
   const [profiles, setProfiles] = useState(() => loadLocalProfiles());
 
-  // Determine initial view
+  // Determine which screen to show on load
   const [view, setView] = useState(() => {
     const allProfiles = loadLocalProfiles();
-    const deviceId = (() => {
-      let id = localStorage.getItem('streak_duel_device_user_id');
-      if (!id) { id = 'usr_' + Math.random().toString(36).substring(2, 9); localStorage.setItem('streak_duel_device_user_id', id); }
-      return id;
-    })();
-    if (allProfiles[deviceId]) return 'dashboard';
+    const id = localStorage.getItem('streak_duel_device_user_id');
+    if (id && allProfiles[id]) return 'dashboard';
     if (localStorage.getItem(ONBOARDED_KEY)) return 'profile-setup';
     return 'welcome';
   });
 
-  const [showEditProfile, setShowEditProfile] = useState(false);
-  const [showHabitModal, setShowHabitModal] = useState(false);
-  const [showSupabaseModal, setShowSupabaseModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showEditProfile,  setShowEditProfile]  = useState(false);
+  const [showHabitModal,   setShowHabitModal]   = useState(false);
+  const [showSupabaseModal,setShowSupabaseModal] = useState(false);
+  const [showInviteModal,  setShowInviteModal]  = useState(false);
+  const [showAdminPanel,   setShowAdminPanel]   = useState(false);
 
   const myProfile = profiles[myDeviceId] || null;
 
-  // Subscribe to real-time updates from other devices
+  // Subscribe to realtime updates from other devices
   useEffect(() => {
-    const unsubscribe = subscribeToProfiles((updatedProfiles) => {
+    const unsubscribe = subscribeToProfiles(updatedProfiles => {
       setProfiles(updatedProfiles);
     });
     return unsubscribe;
   }, []);
+
+  /* ── Profile actions ─────────────────────────────────────── */
 
   const handleGetStarted = () => {
     localStorage.setItem(ONBOARDED_KEY, '1');
@@ -62,24 +63,36 @@ export function App() {
 
   const handleSaveProfile = useCallback(async (profileData) => {
     const existing = profiles[myDeviceId] || {};
+    const isFirstProfile = Object.keys(profiles).length === 0;
+
     const updated = {
       ...existing,
-      id: myDeviceId,
-      name: profileData.name,
-      tagline: profileData.tagline || '',
-      avatar: profileData.avatar,
-      colorTheme: profileData.colorTheme,
+      id:            myDeviceId,
+      name:          profileData.name,
+      tagline:       profileData.tagline || '',
+      avatar:        profileData.avatar,
+      colorTheme:    profileData.colorTheme,
       currentStreak: existing.currentStreak || 0,
-      bestStreak: existing.bestStreak || 0,
-      lastTickedDate: existing.lastTickedDate || null,
-      history: existing.history || {}
+      bestStreak:    existing.bestStreak    || 0,
+      lastTickedDate:existing.lastTickedDate || null,
+      history:       existing.history || {},
+      // First person to create a profile becomes admin automatically
+      isAdmin:       existing.isAdmin || isFirstProfile
     };
 
     const saved = await saveProfileToStorage(updated);
-    setProfiles(prev => ({ ...prev, [myDeviceId]: saved }));
+
+    // If first profile ever, also set admin flag in DB
+    if (isFirstProfile) {
+      await claimAdminStatus(myDeviceId);
+    }
+
+    setProfiles(prev => ({ ...prev, [myDeviceId]: { ...saved, isAdmin: updated.isAdmin } }));
     setShowEditProfile(false);
     setView('dashboard');
   }, [myDeviceId, profiles]);
+
+  /* ── Tick action ─────────────────────────────────────────── */
 
   const handleTick = useCallback(async (userToTick) => {
     if (userToTick.id !== myDeviceId) return;
@@ -93,12 +106,21 @@ export function App() {
     }
   }, [myDeviceId]);
 
+  /* ── Admin: remove player ────────────────────────────────── */
+
+  const handleRemoveProfile = useCallback(async (targetId) => {
+    const updated = await removeProfileFromStorage(targetId);
+    setProfiles({ ...updated });
+  }, []);
+
+  /* ── Habit ───────────────────────────────────────────────── */
+
   const handleSaveHabit = useCallback((habitData) => {
     setHabit(habitData);
     saveHabitConfig(habitData);
   }, []);
 
-  // ---- VIEWS ----
+  /* ── Views ───────────────────────────────────────────────── */
 
   if (view === 'welcome') {
     return <WelcomeScreen onGetStarted={handleGetStarted} />;
@@ -114,7 +136,7 @@ export function App() {
     );
   }
 
-  // Dashboard view
+  /* ── Dashboard ───────────────────────────────────────────── */
   return (
     <div className="app-viewport">
       <Header
@@ -124,6 +146,7 @@ export function App() {
         onOpenHabitModal={() => setShowHabitModal(true)}
         onOpenSupabaseModal={() => setShowSupabaseModal(true)}
         onOpenInviteModal={() => setShowInviteModal(true)}
+        onOpenAdminPanel={() => setShowAdminPanel(true)}
       />
 
       <main>
@@ -140,7 +163,7 @@ export function App() {
         StreakDuel &bull; Each device = one unique profile &bull; Synced via Supabase Cloud
       </footer>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       {showEditProfile && (
         <EditProfileModal
           currentProfile={myProfile}
@@ -166,6 +189,15 @@ export function App() {
       {showInviteModal && (
         <InviteModal
           onClose={() => setShowInviteModal(false)}
+        />
+      )}
+
+      {showAdminPanel && myProfile?.isAdmin && (
+        <AdminPanelModal
+          profiles={profiles}
+          myDeviceId={myDeviceId}
+          onRemoveProfile={handleRemoveProfile}
+          onClose={() => setShowAdminPanel(false)}
         />
       )}
     </div>

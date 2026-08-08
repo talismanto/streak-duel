@@ -40,7 +40,8 @@ function rowToProfile(p) {
     currentStreak: p.current_streak || 0,
     bestStreak:    p.best_streak    || 0,
     lastTickedDate:p.last_ticked_date || null,
-    history:       p.history ? (typeof p.history === 'string' ? JSON.parse(p.history) : p.history) : {}
+    history:       p.history ? (typeof p.history === 'string' ? JSON.parse(p.history) : p.history) : {},
+    isAdmin:       p.is_admin || false
   };
 }
 
@@ -48,6 +49,7 @@ function rowToProfile(p) {
 function profileToRow(p) {
   return {
     id:              p.id,
+    is_admin:        p.isAdmin || false,
     name:            p.name,
     tagline:         p.tagline         || '',
     avatar_url:      p.avatar          || '',
@@ -235,4 +237,50 @@ export function subscribeToProfiles(onProfilesUpdated) {
     window.removeEventListener('storage', handleStorage);
     if (supabaseChannel && supabase) supabase.removeChannel(supabaseChannel);
   };
+}
+
+/* ── Admin helpers ───────────────────────────────────────────── */
+
+/**
+ * Grant admin status to a profile (by ID).
+ * Only the calling device should do this for itself.
+ */
+export async function claimAdminStatus(profileId) {
+  try {
+    const local = loadLocalProfiles();
+    if (local[profileId]) {
+      local[profileId].isAdmin = true;
+      persistLocalProfiles(local);
+    }
+    if (supabase) {
+      await supabase.from('profiles')
+        .update({ is_admin: true })
+        .eq('id', profileId);
+    }
+  } catch (e) {
+    console.warn('claimAdminStatus error:', e);
+  }
+}
+
+/**
+ * Remove a profile entirely (admin only).
+ * Deletes from both local storage and Supabase.
+ */
+export async function removeProfileFromStorage(targetId) {
+  try {
+    // Remove from local
+    const local = loadLocalProfiles();
+    delete local[targetId];
+    persistLocalProfiles(local);
+
+    // Remove from Supabase
+    if (supabase) {
+      await supabase.from('checkins').delete().eq('user_id', targetId);
+      await supabase.from('profiles').delete().eq('id', targetId);
+    }
+    return { ...local };
+  } catch (e) {
+    console.error('removeProfileFromStorage error:', e);
+    return loadLocalProfiles();
+  }
 }
