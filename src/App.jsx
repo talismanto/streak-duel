@@ -63,7 +63,8 @@ export function App() {
 
   const handleSaveProfile = useCallback(async (profileData) => {
     const existing = profiles[myDeviceId] || {};
-    const isFirstProfile = Object.keys(profiles).length === 0;
+    // profileData.isAdmin may already be set if coming from recovery flow
+    const isFirstProfile = Object.keys(profiles).length === 0 && !profileData.isAdmin;
 
     const updated = {
       ...existing,
@@ -72,17 +73,15 @@ export function App() {
       tagline:       profileData.tagline || '',
       avatar:        profileData.avatar,
       colorTheme:    profileData.colorTheme,
-      currentStreak: existing.currentStreak || 0,
-      bestStreak:    existing.bestStreak    || 0,
-      lastTickedDate:existing.lastTickedDate || null,
-      history:       existing.history || {},
-      // First person to create a profile becomes admin automatically
-      isAdmin:       existing.isAdmin || isFirstProfile
+      currentStreak: profileData.currentStreak ?? existing.currentStreak ?? 0,
+      bestStreak:    profileData.bestStreak    ?? existing.bestStreak    ?? 0,
+      lastTickedDate:profileData.lastTickedDate ?? existing.lastTickedDate ?? null,
+      history:       profileData.history       ?? existing.history       ?? {},
+      isAdmin:       profileData.isAdmin || existing.isAdmin || isFirstProfile
     };
 
     const saved = await saveProfileToStorage(updated);
 
-    // If first profile ever, also set admin flag in DB
     if (isFirstProfile) {
       await claimAdminStatus(myDeviceId);
     }
@@ -91,6 +90,7 @@ export function App() {
     setShowEditProfile(false);
     setView('dashboard');
   }, [myDeviceId, profiles]);
+
 
   /* ── Tick action ─────────────────────────────────────────── */
 
