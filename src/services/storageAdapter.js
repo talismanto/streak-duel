@@ -365,7 +365,7 @@ export async function saveWagerToStorage(wager) {
     persistWagers(current);
 
     if (supabase) {
-      await supabase.from('wagers').upsert({
+      const { error } = await supabase.from('wagers').upsert({
         id:            wager.id,
         creator_id:    wager.creatorId,
         creator_name:  wager.creatorName,
@@ -378,6 +378,9 @@ export async function saveWagerToStorage(wager) {
         status:        wager.status || 'pending',
         created_at:    wager.createdAt || new Date().toISOString()
       });
+      if (error) {
+        console.error('Supabase saveWager error:', error.message, error.details, error.hint);
+      }
     }
     return current;
   } catch (e) {
@@ -395,7 +398,10 @@ export async function respondToWager(wagerId, newStatus) {
       persistWagers([...current]);
 
       if (supabase) {
-        await supabase.from('wagers').update({ status: newStatus }).eq('id', wagerId);
+        const { error } = await supabase.from('wagers').update({ status: newStatus }).eq('id', wagerId);
+        if (error) {
+          console.error('Supabase respondToWager error:', error.message);
+        }
       }
     }
     return loadWagers();
@@ -411,7 +417,10 @@ export async function deleteWagerFromStorage(wagerId) {
     persistWagers(current);
 
     if (supabase) {
-      await supabase.from('wagers').delete().eq('id', wagerId);
+      const { error } = await supabase.from('wagers').delete().eq('id', wagerId);
+      if (error) {
+        console.error('Supabase deleteWager error:', error.message);
+      }
     }
     return current;
   } catch (e) {
@@ -452,12 +461,18 @@ export function subscribeToWagers(onWagersUpdated) {
   if (supabase) {
     // Initial fetch from cloud
     supabase.from('wagers').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
-      if (!error && data) {
+      if (error) {
+        console.warn('Supabase fetch wagers error (make sure public.wagers table is created in Supabase SQL editor):', error.message);
+        return;
+      }
+      if (data) {
         const loaded = data.map(rowToWager);
         persistWagers(loaded);
         onWagersUpdated(loaded);
       }
-    }).catch(() => {});
+    }).catch((err) => {
+      console.warn('Wagers fetch exception:', err);
+    });
 
     // Realtime channel
     try {
@@ -467,9 +482,8 @@ export function subscribeToWagers(onWagersUpdated) {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'wagers' },
           (payload) => {
-            // Re-fetch all wagers on any change
-            supabase.from('wagers').select('*').order('created_at', { ascending: false }).then(({ data }) => {
-              if (data) {
+            supabase.from('wagers').select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+              if (!error && data) {
                 const loaded = data.map(rowToWager);
                 persistWagers(loaded);
                 onWagersUpdated(loaded);
@@ -486,4 +500,5 @@ export function subscribeToWagers(onWagersUpdated) {
     if (channel && supabase) supabase.removeChannel(channel);
   };
 }
+
 

@@ -14,8 +14,15 @@ export function DuelDashboard({
   onOpenWagersTab,
   onRespondWager
 }) {
-  const profileList = Object.values(profiles || {});
+  const rawProfiles = Object.values(profiles || {});
   const todayStr = formatDate();
+
+  // Sort profiles so current device's own profile ALWAYS appears FIRST at top/top-left!
+  const profileList = rawProfiles.sort((a, b) => {
+    if (a.id === myDeviceId) return -1;
+    if (b.id === myDeviceId) return 1;
+    return 0;
+  });
 
   // Find active accepted wagers involving me, or overall active wagers
   const myActiveWager = wagers.find(w => 
@@ -118,8 +125,30 @@ export function DuelDashboard({
           ))}
         </div>
       )}
+
+      {/* Leaderboard Banner */}
+      <div className="leaderboard-banner">
+        <div className="leader-headline">
+          {leaderboard.headline}
+        </div>
+        <div className="leader-subtext">
+          {leaderboard.subtext}
+        </div>
+      </div>
+
+      {/* Side-by-Side User Cards (Current Device User ALWAYS First on Top!) */}
+      <div className="duel-grid">
+        {profileList.map((user) => (
+          <UserCard 
+            key={user.id} 
+            user={user} 
+            myDeviceId={myDeviceId} 
+            onTick={onTick} 
+          />
+        ))}
+      </div>
       
-      {/* Dynamic Stakes / Wager Banner */}
+      {/* Active Duel Wager Banner (AT THE BOTTOM OF THE PAGE NOW!) */}
       <div 
         style={{
           background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12), rgba(249, 115, 22, 0.12))',
@@ -212,27 +241,6 @@ export function DuelDashboard({
         )}
       </div>
 
-      {/* Leaderboard Banner */}
-      <div className="leaderboard-banner">
-        <div className="leader-headline">
-          {leaderboard.headline}
-        </div>
-        <div className="leader-subtext">
-          {leaderboard.subtext}
-        </div>
-      </div>
-
-      {/* Side-by-Side User Cards */}
-      <div className="duel-grid">
-        {profileList.map((user) => (
-          <UserCard 
-            key={user.id} 
-            user={user} 
-            myDeviceId={myDeviceId} 
-            onTick={onTick} 
-          />
-        ))}
-      </div>
     </div>
   );
 }

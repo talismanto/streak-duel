@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Target, Check, Flame, Trophy, Coins } from 'lucide-react';
+import { X, Sparkles, Target, Check, Coins, Lock } from 'lucide-react';
 
-export function HabitCustomizerModal({ habit, onSave, onClose }) {
+export function HabitCustomizerModal({ habit, onSave, onClose, isAdmin = false }) {
   const [title, setTitle] = useState(habit.title || '');
   const [category, setCategory] = useState(habit.category || 'Fitness & Health');
   const [description, setDescription] = useState(habit.description || '');
@@ -9,6 +9,7 @@ export function HabitCustomizerModal({ habit, onSave, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (!title.trim()) return;
     onSave({
       title: title.trim(),
@@ -44,10 +45,28 @@ export function HabitCustomizerModal({ habit, onSave, onClose }) {
         <div className="modal-header">
           <h3>
             <Sparkles size={20} color="#06b6d4" />
-            <span>Customize Habit & Wager Stakes</span>
+            <span>Habit & Challenge Rules</span>
           </h3>
           <button className="close-btn" onClick={onClose}><X size={20} /></button>
         </div>
+
+        {!isAdmin && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            fontSize: '0.82rem',
+            color: '#fca5a5',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <Lock size={18} color="#f87171" />
+            <span>Only the duel Admin can edit the main habit title and rules.</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
@@ -60,41 +79,44 @@ export function HabitCustomizerModal({ habit, onSave, onClose }) {
           }}>
             <label style={{ color: '#eab308', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800 }}>
               <Coins size={18} color="#eab308" />
-              <span>STAKES / WAGER FOR THE DUEL</span>
+              <span>DEFAULT STAKES / WAGER</span>
             </label>
             <input 
               type="text" 
               className="form-input"
               style={{ marginTop: '8px', borderColor: 'rgba(234, 179, 8, 0.4)', background: 'rgba(0,0,0,0.5)', fontWeight: 700 }}
               value={wager}
+              disabled={!isAdmin}
               onChange={(e) => setWager(e.target.value)}
-              placeholder="e.g. ☕ Loser buys coffee / 💵 $10 / 🍕 Loser buys pizza"
+              placeholder="e.g. ☕ Loser buys coffee"
               required 
             />
 
             {/* Quick Wager Chips */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
-              {presetWagers.map((w) => (
-                <button
-                  type="button"
-                  key={w}
-                  onClick={() => setWager(w)}
-                  style={{
-                    background: wager === w ? 'rgba(234, 179, 8, 0.25)' : 'rgba(0,0,0,0.3)',
-                    border: wager === w ? '1px solid #eab308' : '1px solid rgba(255,255,255,0.1)',
-                    color: wager === w ? '#fef08a' : '#cbd5e1',
-                    borderRadius: '20px',
-                    padding: '4px 10px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  {w}
-                </button>
-              ))}
-            </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                {presetWagers.map((w) => (
+                  <button
+                    type="button"
+                    key={w}
+                    onClick={() => setWager(w)}
+                    style={{
+                      background: wager === w ? 'rgba(234, 179, 8, 0.25)' : 'rgba(0,0,0,0.3)',
+                      border: wager === w ? '1px solid #eab308' : '1px solid rgba(255,255,255,0.1)',
+                      color: wager === w ? '#fef08a' : '#cbd5e1',
+                      borderRadius: '20px',
+                      padding: '4px 10px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -103,6 +125,7 @@ export function HabitCustomizerModal({ habit, onSave, onClose }) {
               type="text" 
               className="form-input"
               value={title}
+              disabled={!isAdmin}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Daily 30-Min Gym Workout"
               required 
@@ -115,6 +138,7 @@ export function HabitCustomizerModal({ habit, onSave, onClose }) {
               type="text" 
               className="form-input"
               value={category}
+              disabled={!isAdmin}
               onChange={(e) => setCategory(e.target.value)}
               placeholder="e.g. Fitness, Learning, Coding"
             />
@@ -126,42 +150,49 @@ export function HabitCustomizerModal({ habit, onSave, onClose }) {
               className="form-input"
               rows={3}
               value={description}
+              disabled={!isAdmin}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What counts as completing this daily habit?"
             />
           </div>
 
-          <div>
-            <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
-              Quick Presets
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {presetHabits.map((preset) => (
-                <button
-                  type="button"
-                  key={preset.title}
-                  className="icon-btn"
-                  style={{ fontSize: '0.78rem', padding: '6px 12px' }}
-                  onClick={() => {
-                    setTitle(preset.title);
-                    setCategory(preset.category);
-                    setDescription(preset.desc);
-                    setWager(preset.wager);
-                  }}
-                >
-                  <Target size={12} color="#06b6d4" />
-                  <span>{preset.title}</span>
-                </button>
-              ))}
+          {isAdmin && (
+            <div>
+              <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                Quick Presets
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {presetHabits.map((preset) => (
+                  <button
+                    type="button"
+                    key={preset.title}
+                    className="icon-btn"
+                    style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                    onClick={() => {
+                      setTitle(preset.title);
+                      setCategory(preset.category);
+                      setDescription(preset.desc);
+                      setWager(preset.wager);
+                    }}
+                  >
+                    <Target size={12} color="#06b6d4" />
+                    <span>{preset.title}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <button type="button" className="icon-btn" onClick={onClose}>Cancel</button>
-            <button type="submit" className="icon-btn primary">
-              <Check size={16} />
-              <span>Save Challenge & Stakes</span>
+            <button type="button" className="icon-btn" onClick={onClose}>
+              {isAdmin ? 'Cancel' : 'Close'}
             </button>
+            {isAdmin && (
+              <button type="submit" className="icon-btn primary">
+                <Check size={16} />
+                <span>Save Challenge & Stakes</span>
+              </button>
+            )}
           </div>
         </form>
       </div>

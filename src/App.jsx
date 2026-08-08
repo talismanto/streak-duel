@@ -236,6 +236,7 @@ export function App() {
       {showHabitModal && (
         <HabitCustomizerModal
           habit={habit}
+          isAdmin={myProfile?.isAdmin || false}
           onSave={handleSaveHabit}
           onClose={() => setShowHabitModal(false)}
         />
