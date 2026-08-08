@@ -71,7 +71,8 @@ export function loadHabitConfig() {
   return {
     title:       'Daily 30-Min Fitness Workout',
     category:    'Fitness & Health',
-    description: 'Complete at least 30 minutes of physical exercise every calendar day.'
+    description: 'Complete at least 30 minutes of physical exercise every calendar day.',
+    wager:       '☕ Loser buys coffee'
   };
 }
 
@@ -79,10 +80,60 @@ export function saveHabitConfig(habit) {
   try { localStorage.setItem(HABIT_KEY, JSON.stringify(habit)); } catch (e) {}
   if (supabase) {
     supabase.from('habit_config')
-      .upsert({ id: 1, title: habit.title, category: habit.category, description: habit.description })
+      .upsert({ id: 1, title: habit.title, category: habit.category, description: habit.description, wager: habit.wager })
       .then(() => {}).catch(() => {});
   }
 }
+
+export function subscribeToHabitConfig(onHabitUpdated) {
+  if (typeof window === 'undefined') return () => {};
+
+  // Fetch initial cloud habit config
+  if (supabase) {
+    supabase.from('habit_config').select('*').eq('id', 1).single().then(({ data }) => {
+      if (data && data.title) {
+        const loaded = {
+          title: data.title,
+          category: data.category || 'Fitness & Health',
+          description: data.description || '',
+          wager: data.wager || '☕ Loser buys coffee'
+        };
+        try { localStorage.setItem(HABIT_KEY, JSON.stringify(loaded)); } catch (e) {}
+        onHabitUpdated(loaded);
+      }
+    }).catch(() => {});
+
+    // Listen for Realtime changes to habit_config
+    try {
+      const channel = supabase
+        .channel('realtime:habit_config')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'habit_config' },
+          (payload) => {
+            const data = payload.new;
+            if (data && data.title) {
+              const updated = {
+                title: data.title,
+                category: data.category || 'Fitness & Health',
+                description: data.description || '',
+                wager: data.wager || '☕ Loser buys coffee'
+              };
+              try { localStorage.setItem(HABIT_KEY, JSON.stringify(updated)); } catch (e) {}
+              onHabitUpdated(updated);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        if (supabase) supabase.removeChannel(channel);
+      };
+    } catch (e) {}
+  }
+  return () => {};
+}
+
 
 /* ── Local profiles ───────────────────────────────────────────── */
 

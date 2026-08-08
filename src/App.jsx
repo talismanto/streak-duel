@@ -14,6 +14,7 @@ import {
   getEffectiveDate,
   loadHabitConfig,
   saveHabitConfig,
+  subscribeToHabitConfig,
   loadLocalProfiles,
   saveProfileToStorage,
   subscribeToProfiles,
@@ -48,11 +49,18 @@ export function App() {
 
   // Subscribe to realtime updates from other devices
   useEffect(() => {
-    const unsubscribe = subscribeToProfiles(updatedProfiles => {
+    const unsubscribeProfiles = subscribeToProfiles(updatedProfiles => {
       setProfiles(updatedProfiles);
     });
-    return unsubscribe;
+    const unsubscribeHabit = subscribeToHabitConfig(updatedHabit => {
+      setHabit(updatedHabit);
+    });
+    return () => {
+      unsubscribeProfiles();
+      unsubscribeHabit();
+    };
   }, []);
+
 
   /* ── Profile actions ─────────────────────────────────────── */
 
@@ -154,6 +162,8 @@ export function App() {
           profiles={profiles}
           myDeviceId={myDeviceId}
           onTick={handleTick}
+          habit={habit}
+          onOpenHabitModal={() => setShowHabitModal(true)}
         />
       </main>
 
